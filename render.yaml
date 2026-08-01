@@ -1,8 +1,0 @@
-services:
-  - type: web
-    name: redhub-stream
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: sh start.sh
-    plan: free
-    autoDeploy: true

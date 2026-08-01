@@ -1,6 +1,0 @@
-Flask
-gunicorn
-gdown
-requests
-python-dotenv
-yt-dlp
