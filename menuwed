@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+set -eu
+
+resolve_script_path() {
+  target=$1
+  if command -v readlink >/dev/null 2>&1; then
+    resolved="$(readlink -f -- "$target" 2>/dev/null || true)"
+    if [ -n "$resolved" ]; then
+      printf '%s\n' "$resolved"
+      return 0
+    fi
+  fi
+
+  python3 - "$target" <<'PY'
+from pathlib import Path
+import os, sys
+print(Path(sys.argv[1]).resolve())
+PY
+}
+
+SCRIPT_PATH="$(resolve_script_path "$0")"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)"
+exec "${PYTHON:-python3}" "$SCRIPT_DIR/menuwed.py" "$@"
