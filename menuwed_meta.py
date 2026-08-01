@@ -111,7 +111,17 @@ def project_name() -> str:
 
 
 def app_version() -> str:
-    return config_value("version", DEFAULT_CONFIG["version"])
+    version = config_value("version", DEFAULT_CONFIG["version"])
+    if version and version.strip().lower() != "latest":
+        return version
+    try:
+        info = latest_release_info()
+        tag = str(info.get("tag_name") or "").strip()
+        if tag:
+            return tag
+    except Exception:
+        pass
+    return version
 
 
 def github_repo() -> str:
@@ -228,7 +238,8 @@ def sync_env_metadata(
 ) -> None:
     current = read_env_file(env_path)
     current["PROJECT_NAME"] = project or project_name()
-    if force_version or "APP_VERSION" not in current or not current["APP_VERSION"].strip():
+    current_version = str(current.get("APP_VERSION") or "").strip()
+    if force_version or not current_version or current_version.lower() == "latest":
         current["APP_VERSION"] = version or app_version()
     if data_dir:
         current["DATA_DIR"] = data_dir
@@ -269,9 +280,12 @@ def sync_env_metadata(
 
 def runtime_metadata(env_path: Path | None = None) -> dict[str, str]:
     values = read_env_file(env_path) if env_path else {}
+    app_ver = str(values.get("APP_VERSION") or "").strip()
+    if not app_ver or app_ver.lower() == "latest":
+        app_ver = app_version()
     return {
         "project_name": values.get("PROJECT_NAME") or project_name(),
-        "app_version": values.get("APP_VERSION") or app_version(),
+        "app_version": app_ver,
         "data_dir": values.get("DATA_DIR") or str(default_data_dir()),
         "public_base_url": values.get("PUBLIC_BASE_URL", ""),
         "service_name": values.get("SERVICE_NAME") or config_value("service_name", DEFAULT_CONFIG["service_name"]),

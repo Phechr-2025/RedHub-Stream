@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import ipaddress
 import json
 import os
 import platform
@@ -149,7 +150,11 @@ def current_env() -> dict[str, str]:
         env.update(read_env_file(env_path()))
     env["DATA_DIR"] = str(data_root())
     env.setdefault("PROJECT_NAME", env.get("PROJECT_NAME") or config_project_name())
-    env.setdefault("APP_VERSION", env.get("APP_VERSION") or config_app_version())
+    app_version = str(env.get("APP_VERSION") or "").strip()
+    if not app_version or app_version.lower() == "latest":
+        env["APP_VERSION"] = config_app_version()
+    else:
+        env["APP_VERSION"] = app_version
     env.setdefault("PORT", env.get("PORT") or env.get("WEB_PORT") or str(SYSTEM_PORT))
     env.setdefault("WEB_PORT", env.get("WEB_PORT") or env["PORT"])
     env.setdefault("WEB_HOST", env.get("WEB_HOST") or SYSTEM_HOST)
@@ -168,13 +173,23 @@ def local_ip() -> str:
         return "127.0.0.1"
 
 
+def private_ip() -> str:
+    host = local_ip() or "127.0.0.1"
+    try:
+        addr = ipaddress.ip_address(host)
+        if addr.is_private or addr.is_loopback:
+            return host
+    except Exception:
+        pass
+    return "127.0.0.1"
+
+
 def public_url() -> str:
     env = read_env_file(env_path())
     if env.get("PUBLIC_BASE_URL"):
         return env["PUBLIC_BASE_URL"].rstrip("/")
     port = env.get("PORT") or env.get("WEB_PORT") or str(SYSTEM_PORT)
-    host = local_ip() or "127.0.0.1"
-    return f"http://{host}:{port}"
+    return f"http://127.0.0.1:{port}"
 
 
 def is_private_access_host(host: str) -> bool:
@@ -250,7 +265,9 @@ def ensure_env(force: bool = False) -> Path:
             if key not in merged or not str(merged[key]).strip():
                 merged[key] = value
         merged["PROJECT_NAME"] = merged.get("PROJECT_NAME") or config_project_name()
-        merged["APP_VERSION"] = merged.get("APP_VERSION") or config_app_version()
+        merged_version = str(merged.get("APP_VERSION") or "").strip()
+        if not merged_version or merged_version.lower() == "latest":
+            merged["APP_VERSION"] = config_app_version()
         merged["DATA_DIR"] = merged.get("DATA_DIR") or str(data_root())
         merged["PORT"] = str(int(os.getenv("PORT") or os.getenv("WEB_PORT") or merged.get("PORT") or SYSTEM_PORT))
         merged["WEB_PORT"] = merged["PORT"]
@@ -273,7 +290,11 @@ def ensure_env(force: bool = False) -> Path:
     merged = dict(defaults)
     merged.update(current)
     merged["PROJECT_NAME"] = os.getenv("PROJECT_NAME") or merged.get("PROJECT_NAME") or config_project_name()
-    merged["APP_VERSION"] = os.getenv("APP_VERSION") or merged.get("APP_VERSION") or config_app_version()
+    merged_version = str(os.getenv("APP_VERSION") or merged.get("APP_VERSION") or "").strip()
+    if not merged_version or merged_version.lower() == "latest":
+        merged["APP_VERSION"] = config_app_version()
+    else:
+        merged["APP_VERSION"] = merged_version
     merged["DATA_DIR"] = str(data_root())
     merged["PORT"] = str(int(os.getenv("PORT") or os.getenv("WEB_PORT") or merged.get("PORT") or SYSTEM_PORT))
     merged["WEB_PORT"] = merged["PORT"]
@@ -542,17 +563,26 @@ def web_status() -> dict[str, str]:
 
 def print_web_status() -> None:
     status = web_status()
-    print("\n=== สถานะเว็บ ===")
-    print(f"สถานะ: {'กำลังทำงาน' if status['alive'] == 'yes' else 'หยุดอยู่'}")
-    print(f"PID: {status['pid']}")
-    print(f"PID ยังทำงาน: {status['pid_alive']}")
-    print(f"ตอบสนองพอร์ต: {status['endpoint_alive']}")
-    print(f"URL: {status['url']}")
-    if is_private_access_host(status['url'].split('://', 1)[-1].split(':', 1)[0]):
-        print("หมายเหตุ: ที่อยู่นี้เป็น private IP ของเครื่อง ไม่ใช่ public URL")
-    print(f"พอร์ต: {status['port']}")
-    print(f"โปรเจกต์: {status['project']}")
-    print(f"เวอร์ชัน: {status['version']}")
+    env = read_env_file(env_path())
+    port = int(status["port"])
+    private_url_value = f"http://{private_ip()}:{port}"
+    public_url_value = public_url()
+    firewall_text = "ไม่ทราบ"
+
+    print()
+    _print_compact_block(
+        project=status["project"],
+        version=status["version"],
+        install_path=INSTALL_PATH,
+        command=str(INSTALL_PATH / "menuwed"),
+        port=port,
+        firewall=firewall_text,
+        status="กำลังทำงาน" if status["alive"] == "yes" else "หยุดอยู่",
+        pid=status["pid"],
+        private_url=private_url_value,
+        public_url_value=public_url_value,
+        show_menu_prompt=False,
+    )
 
 
 def start_web_foreground() -> int:
@@ -672,23 +702,26 @@ def restart_web() -> int:
 def show_web_info() -> None:
     meta = runtime_metadata(env_path())
     env = read_env_file(env_path())
+    status = web_status()
     port = int(env.get("WEB_PORT") or env.get("PORT") or SYSTEM_PORT)
-    private_host = local_ip() or "127.0.0.1"
-    private_url = f"http://{private_host}:{port}"
-    public_url_value = env.get("PUBLIC_BASE_URL") or f"http://127.0.0.1:{port}"
+    private_url_value = f"http://{private_ip()}:{port}"
+    public_url_value = public_url()
+    firewall_text = "ไม่ทราบ"
 
     print()
-    print("=== ข้อมูลเว็บ ===")
-    print(f"ชื่อโปรเจกต์ : {meta['project_name']}")
-    print(f"เวอร์ชัน : {meta['app_version']}")
-    print(f"ที่ตั้งไฟล์ : {INSTALL_PATH}")
-    print(f"โฟลเดอร์ข้อมูล : {data_root()}")
-    print(f"พอร์ตเว็บ : {port}")
-    print(f"Private URL : {private_url}")
-    print(f"Public URL : {public_url_value}")
-    print(f"ไฟล์ config : {env_path()}")
-    print(f"Virtualenv : {VENV_DIR}")
-    print(f"PID file : {PID_FILE}")
+    _print_compact_block(
+        project=meta["project_name"],
+        version=meta["app_version"],
+        install_path=INSTALL_PATH,
+        command=str(INSTALL_PATH / "menuwed"),
+        port=port,
+        firewall=firewall_text,
+        status="กำลังทำงาน" if status["alive"] == "yes" else "หยุดอยู่",
+        pid=status["pid"],
+        private_url=private_url_value,
+        public_url_value=public_url_value,
+        show_menu_prompt=False,
+    )
 
 def bind_domain() -> None:
     current = read_env_file(env_path()).get("PUBLIC_BASE_URL", "")
@@ -765,6 +798,23 @@ def uninstall(confirm: bool = True) -> int:
     install_dir = INSTALL_PATH
     data_dir = data_root()
 
+    if os.name != "nt":
+        for shim in (Path.home() / ".local" / "bin" / "menuwed", Path("/usr/local/bin/menuwed")):
+            try:
+                if shim.exists() or shim.is_symlink():
+                    shim.unlink(missing_ok=True)
+            except Exception:
+                pass
+    else:
+        try:
+            local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
+            if local_appdata:
+                bin_dir = Path(local_appdata) / "menuwed-bin"
+                if bin_dir.exists():
+                    shutil.rmtree(bin_dir, ignore_errors=True)
+        except Exception:
+            pass
+
     if install_dir.exists():
         shutil.rmtree(install_dir, ignore_errors=True)
     if data_dir.exists() and data_dir != install_dir:
@@ -835,7 +885,60 @@ def _copy_release_tree(source_root: Path, destination: Path) -> None:
     }
     _sync_release_tree(source_root, destination, preserve)
 
-def _perform_update(zip_url: str, label: str) -> int:
+def _ensure_executable_files(root: Path) -> None:
+    for rel in ("menuwed", "start.sh", "install.sh"):
+        path = root / rel
+        if not path.exists() or path.is_dir():
+            continue
+        try:
+            mode = path.stat().st_mode
+            path.chmod(mode | 0o111)
+        except Exception:
+            pass
+
+
+def _format_compact_header(project: str, version: str) -> tuple[str, int]:
+    title = f"{project} v{version}".strip()
+    width = max(30, len(title) + 8)
+    line = "═" * width
+    return line, width
+
+
+def _print_compact_block(
+    *,
+    project: str,
+    version: str,
+    install_path: Path,
+    command: str,
+    port: int,
+    firewall: str,
+    status: str | None = None,
+    pid: str | int | None = None,
+    private_url: str,
+    public_url_value: str,
+    show_menu_prompt: bool = False,
+) -> None:
+    line, width = _format_compact_header(project, version)
+    title = f"{project} v{version}".strip()
+    print(line)
+    print(title.center(width))
+    print(line)
+    print(f"📦 โปรเจกต์ : {project}")
+    print(f"🏷️ เวอร์ชัน : {version}")
+    print(f"📂 ติดตั้ง : {install_path}")
+    print(f"⚙️ คำสั่ง : {command}")
+    print(f"🌐 พอร์ต : {port}")
+    print(f"🔥 Firewall : {firewall}")
+    if status is not None:
+        print(f"🟢 สถานะ : {status}")
+    if pid is not None:
+        print(f"🆔 PID : {pid}")
+    print(f"🔗 Private URL : {private_url}")
+    print(f"🔗 Public URL : {public_url_value}")
+    if show_menu_prompt:
+        print("เรียกใช้งานเมนู : menuwed")
+
+def _perform_update(zip_url: str, label: str, version: str | None = None) -> int:
     if not zip_url:
         print("ไม่พบ release ที่ต้องการอัปเดต")
         return 1
@@ -859,8 +962,11 @@ def _perform_update(zip_url: str, label: str) -> int:
 
             print("กำลังอัปเดตไฟล์โปรเจกต์...")
             _copy_release_tree(src_root, INSTALL_PATH)
+            _ensure_executable_files(INSTALL_PATH)
 
         ensure_env(force=False)
+        if version:
+            sync_env_metadata(env_path(), version=version, force_version=True)
         ensure_dependencies(force=False)
 
         if was_running:
@@ -880,7 +986,7 @@ def _perform_update(zip_url: str, label: str) -> int:
 def update_latest() -> int:
     info = latest_release_info(github_repo())
     version = info.get("tag_name") or "latest"
-    return _perform_update(info["zipball_url"], f"release ล่าสุด ({version})")
+    return _perform_update(info["zipball_url"], f"release ล่าสุด ({version})", version=version)
 
 
 def update_specific() -> int:
@@ -892,7 +998,7 @@ def update_specific() -> int:
         return _perform_update(value, "release ที่ระบุ")
     info = latest_release_info(github_repo(), value)
     version = info.get("tag_name") or value
-    return _perform_update(info["zipball_url"], f"release tag ({version})")
+    return _perform_update(info["zipball_url"], f"release tag ({version})", version=version)
 
 
 def update_libraries() -> int:
@@ -917,7 +1023,19 @@ def install() -> int:
     MARKER_FILE.write_text("installed\n", encoding="utf-8")
 
     meta = runtime_metadata(env_path())
-    print(f"เตรียมติดตั้งเสร็จแล้ว: {meta['project_name']} v{meta['app_version']} ({firewall_result})")
+    _print_compact_block(
+        project=meta["project_name"],
+        version=meta["app_version"],
+        install_path=INSTALL_PATH,
+        command=str(INSTALL_PATH / "menuwed"),
+        port=port,
+        firewall=firewall_result,
+        status="พร้อมใช้งาน",
+        pid="-",
+        private_url=f"http://{private_ip()}:{port}",
+        public_url_value=public_url(),
+        show_menu_prompt=True,
+    )
     return 0
 
 def status() -> int:
@@ -931,10 +1049,21 @@ def interactive_menu() -> int:
             return start_web_foreground()
 
         meta = runtime_metadata(env_path())
-        print("\n=== menuwed ===")
-        print(f"โปรเจกต์: {meta['project_name']}")
-        print(f"เวอร์ชัน: {meta['app_version']}")
-        print(f"ที่ตั้ง: {INSTALL_PATH}")
+        status = web_status()
+        port = int(status["port"])
+        _print_compact_block(
+            project=meta["project_name"],
+            version=meta["app_version"],
+            install_path=INSTALL_PATH,
+            command=str(INSTALL_PATH / "menuwed"),
+            port=port,
+            firewall="ไม่ทราบ",
+            status="กำลังทำงาน" if status["alive"] == "yes" else "หยุดอยู่",
+            pid=status["pid"],
+            private_url=f"http://{private_ip()}:{port}",
+            public_url_value=public_url(),
+            show_menu_prompt=True,
+        )
         print("1) ถอนการติดตั้ง")
         print("2) อัปเดตระบบ")
         print("3) อัปเดตแบบเจาะจง")

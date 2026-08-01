@@ -248,12 +248,24 @@ def local_ip() -> str:
     except Exception:
         return "127.0.0.1"
 
+def private_ip() -> str:
+    host = local_ip() or "127.0.0.1"
+    try:
+        octets = [int(part) for part in host.split(".")]
+        if len(octets) == 4:
+            a, b, c, d = octets
+            if a == 10 or (a == 192 and b == 168) or (a == 172 and 16 <= b <= 31):
+                return host
+    except Exception:
+        pass
+    return "127.0.0.1"
+
 env = read_env_file(install_path / "menuwed_config.json")
 port = int(env.get("PORT") or env.get("WEB_PORT") or "5000")
 pid_path = install_path / ".menuwed-web.pid"
 pid = pid_path.read_text(encoding="utf-8").strip() if pid_path.exists() else "-"
 status = "กำลังทำงาน" if pid != "-" else "ไม่พบการทำงาน"
-private_url = f"http://{local_ip()}:{port}"
+private_url = f"http://{private_ip()}:{port}"
 public_url = env.get("PUBLIC_BASE_URL") or f"http://127.0.0.1:{port}"
 
 title = f"{project_name} v{version}"
