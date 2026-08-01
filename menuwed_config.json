@@ -1,0 +1,22 @@
+{
+  "script_name": "menuwed",
+  "project_name": "MySeriesVideo",
+  "version": "latest",
+  "github_repo": "Phechr-2025/RedHub-Stream",
+  "install_path_unix": "~/menuwed",
+  "install_path_windows": "%USERPROFILE%\\menuwed",
+  "data_dir_unix": "~/menuwed-data",
+  "data_dir_windows": "%USERPROFILE%\\menuwed-data",
+  "service_name": "menuwed",
+  "web_host": "0.0.0.0",
+  "web_port": 5000,
+  "env_file": ".env",
+  "release_channel": "latest",
+  "render_mode_envs": [
+    "RENDER",
+    "RAILWAY_PROJECT_ID",
+    "RAILWAY_SERVICE_ID",
+    "RAILWAY_ENVIRONMENT_ID"
+  ],
+  "venv_dir": ".venv"
+}
