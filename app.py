@@ -39,6 +39,11 @@ def apply_runtime_config_to_env() -> None:
 
     def cfg(*keys: str, default: str = "") -> str:
         for key in keys:
+            env_value = os.getenv(key)
+            if env_value is not None:
+                text = str(env_value).strip()
+                if text:
+                    return text
             value = config.get(key)
             if value is None:
                 continue
@@ -47,10 +52,15 @@ def apply_runtime_config_to_env() -> None:
                 return text
         return default
 
+    config_version = resolve_version(cfg("version"), "")
+    if not config_version:
+        config_version = meta_app_version()
+    app_version_value = resolve_version(cfg("APP_VERSION"), config_version)
+
     mappings = {
         "SECRET_KEY": cfg("secret_key", "SECRET_KEY"),
         "PROJECT_NAME": cfg("project_name", "PROJECT_NAME", default=meta_project_name()),
-        "APP_VERSION": cfg("version", "APP_VERSION", default=meta_app_version()),
+        "APP_VERSION": app_version_value,
         "PUBLIC_BASE_URL": cfg("public_base_url", "PUBLIC_BASE_URL"),
         "DATA_DIR": cfg("data_dir", "DATA_DIR"),
         "WEB_HOST": cfg("web_host", "WEB_HOST", default="0.0.0.0"),
@@ -83,6 +93,13 @@ def env_flag(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def resolve_version(value: str | None, fallback: str = "") -> str:
+    text = str(value or "").strip()
+    if not text or text.lower() == "latest":
+        return fallback
+    return text
 
 
 IS_RAILWAY = any(

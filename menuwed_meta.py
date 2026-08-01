@@ -82,6 +82,13 @@ def config_value(key: str, fallback: str = "") -> str:
     return text if text else fallback
 
 
+def normalize_version(value: str | None, fallback: str = "") -> str:
+    text = str(value or "").strip()
+    if not text or text.lower() == "latest":
+        return fallback
+    return text
+
+
 def expand_path(value: str) -> Path:
     value = str(value or "").strip()
     value = value.replace("%USERPROFILE%", str(Path.home()))
@@ -112,16 +119,15 @@ def project_name() -> str:
 
 def app_version() -> str:
     version = config_value("version", DEFAULT_CONFIG["version"])
-    if version and version.strip().lower() != "latest":
-        return version
-    try:
-        info = latest_release_info()
-        tag = str(info.get("tag_name") or "").strip()
-        if tag:
-            return tag
-    except Exception:
-        pass
-    return version
+    if version.lower() == "latest":
+        try:
+            info = latest_release_info(github_repo())
+            resolved = str(info.get("tag_name") or "").strip()
+            if resolved:
+                return resolved
+        except Exception:
+            pass
+    return normalize_version(version, DEFAULT_CONFIG["version"])
 
 
 def github_repo() -> str:
@@ -205,7 +211,7 @@ def env_defaults(
     return {
         "SECRET_KEY": config_value("secret_key", DEFAULT_CONFIG["secret_key"]),
         "PROJECT_NAME": project or project_name(),
-        "APP_VERSION": version or app_version(),
+        "APP_VERSION": normalize_version(version, app_version()),
         "PUBLIC_BASE_URL": public_base_url or config_value("public_base_url", ""),
         "DATA_DIR": data_dir or str(default_data_dir()),
         "WEB_HOST": config_value("web_host", DEFAULT_CONFIG["web_host"]),
@@ -238,9 +244,9 @@ def sync_env_metadata(
 ) -> None:
     current = read_env_file(env_path)
     current["PROJECT_NAME"] = project or project_name()
-    current_version = str(current.get("APP_VERSION") or "").strip()
+    current_version = str(current.get("APP_VERSION", "")).strip()
     if force_version or not current_version or current_version.lower() == "latest":
-        current["APP_VERSION"] = version or app_version()
+        current["APP_VERSION"] = normalize_version(version, app_version())
     if data_dir:
         current["DATA_DIR"] = data_dir
     elif "DATA_DIR" not in current or not current["DATA_DIR"].strip():
@@ -280,12 +286,9 @@ def sync_env_metadata(
 
 def runtime_metadata(env_path: Path | None = None) -> dict[str, str]:
     values = read_env_file(env_path) if env_path else {}
-    app_ver = str(values.get("APP_VERSION") or "").strip()
-    if not app_ver or app_ver.lower() == "latest":
-        app_ver = app_version()
     return {
         "project_name": values.get("PROJECT_NAME") or project_name(),
-        "app_version": app_ver,
+        "app_version": normalize_version(values.get("APP_VERSION"), app_version()),
         "data_dir": values.get("DATA_DIR") or str(default_data_dir()),
         "public_base_url": values.get("PUBLIC_BASE_URL", ""),
         "service_name": values.get("SERVICE_NAME") or config_value("service_name", DEFAULT_CONFIG["service_name"]),

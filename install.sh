@@ -219,6 +219,8 @@ python3 - "$INSTALL_PATH" "$PROJECT_NAME_RAW" "$VERSION_TAG" "$FIREWALL_RESULT" 
 import pathlib
 import socket
 import sys
+import ipaddress
+import json
 
 install_path = pathlib.Path(sys.argv[1])
 project_name = sys.argv[2]
@@ -229,7 +231,18 @@ def read_env_file(path: pathlib.Path) -> dict[str, str]:
     out: dict[str, str] = {}
     if not path.exists():
         return out
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    raw_text = path.read_text(encoding="utf-8")
+    stripped = raw_text.lstrip()
+    if stripped.startswith("{"):
+        try:
+            data = json.loads(raw_text)
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    out[str(key)] = "" if value is None else str(value)
+                return out
+        except Exception:
+            pass
+    for raw in raw_text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -248,25 +261,21 @@ def local_ip() -> str:
     except Exception:
         return "127.0.0.1"
 
-def private_ip() -> str:
-    host = local_ip() or "127.0.0.1"
+def is_private_or_local(host: str) -> bool:
     try:
-        octets = [int(part) for part in host.split(".")]
-        if len(octets) == 4:
-            a, b, c, d = octets
-            if a == 10 or (a == 192 and b == 168) or (a == 172 and 16 <= b <= 31):
-                return host
+        ip = ipaddress.ip_address(host)
     except Exception:
-        pass
-    return "127.0.0.1"
+        return False
+    return ip.is_private or ip.is_loopback or ip.is_link_local
 
 env = read_env_file(install_path / "menuwed_config.json")
 port = int(env.get("PORT") or env.get("WEB_PORT") or "5000")
 pid_path = install_path / ".menuwed-web.pid"
 pid = pid_path.read_text(encoding="utf-8").strip() if pid_path.exists() else "-"
 status = "กำลังทำงาน" if pid != "-" else "ไม่พบการทำงาน"
-private_url = f"http://{private_ip()}:{port}"
-public_url = env.get("PUBLIC_BASE_URL") or f"http://127.0.0.1:{port}"
+host = local_ip()
+private_host = host if is_private_or_local(host) else "127.0.0.1"
+public_url = env.get("PUBLIC_BASE_URL") or (f"http://{host}:{port}" if not is_private_or_local(host) else f"http://127.0.0.1:{port}")
 
 title = f"{project_name} v{version}"
 width = max(30, len(title) + 8)
@@ -275,24 +284,15 @@ line = "═" * width
 print(line)
 print(title.center(width))
 print(line)
-print()
 print(f"📦 โปรเจกต์ : {project_name}")
 print(f"🏷️ เวอร์ชัน : {version}")
 print(f"📂 ติดตั้ง : {install_path}")
 print(f"⚙️ คำสั่ง : {install_path / 'menuwed'}")
 print(f"🌐 พอร์ต : {port}")
 print(f"🔥 Firewall : {firewall_result}")
-print()
-print("✅ เว็บเริ่มทำงานเรียบร้อย")
 print(f"🟢 สถานะ : {status}")
 print(f"🆔 PID : {pid}")
-print()
-print("🔗 Private URL")
-print(private_url)
-print()
-print("🔗 Public URL")
-print(public_url)
-print()
+print(f"🔗 Private URL : http://{private_host}:{port}")
+print(f"🔗 Public URL : {public_url}")
 print("เรียกใช้งานเมนู : menuwed")
-print(line)
 PY
