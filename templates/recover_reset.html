@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}ตั้งรหัสผ่านใหม่{% endblock %}
+{% block content %}
+<h1>ตั้งรหัสผ่านใหม่</h1>
+<form method="post" class="form">
+  <label for="password">รหัสผ่านใหม่</label>
+  <input type="password" id="password" name="password" autocomplete="new-password" required />
+
+  <label for="password_confirm">ยืนยันรหัสผ่านใหม่</label>
+  <input type="password" id="password_confirm" name="password_confirm" autocomplete="new-password" required />
+
+  <button type="submit" class="btn primary">เปลี่ยนรหัสผ่าน</button>
+</form>
+{% endblock %}

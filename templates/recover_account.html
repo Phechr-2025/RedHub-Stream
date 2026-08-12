@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}กู้คืนบัญชี{% endblock %}
+{% block content %}
+<h1>กู้คืนบัญชี</h1>
+<p class="hint">กรอกอีเมล์ที่ผูกกับบัญชี ระบบจะส่ง OTP ไปยังอีเมล์เพื่อยืนยันตัวตน</p>
+<form method="post" class="form">
+  <label for="email">Gmail / อีเมล์</label>
+  <input type="email" id="email" name="email" autocomplete="email" required />
+  <button type="submit" class="btn primary">ส่ง OTP</button>
+</form>
+<p style="margin-top:0.75rem;"><a href="{{ url_for('user_login') }}">กลับเข้าสู่ระบบ</a></p>
+{% endblock %}

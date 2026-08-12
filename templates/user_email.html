@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{% if has_email %}เปลี่ยนอีเมล์{% else %}เพิ่มอีเมล์{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if has_email %}เปลี่ยนอีเมล์{% else %}เพิ่มอีเมล์{% endif %}</h1>
+{% if has_email %}
+  <p style="margin-bottom:1rem;">อีเมล์ปัจจุบัน: <strong>{{ user['email'] }}</strong></p>
+{% endif %}
+
+{% if has_email and not email_change_enabled %}
+  <div class="flash error">เปิดการบริการเปลี่ยนอีเมล์ชั่วคราว ขออภัยในความไม่สะดวก</div>
+{% else %}
+  <p class="hint">เมื่อกดส่ง ระบบจะส่ง OTP ไปยังอีเมล์ใหม่เพื่อยืนยัน</p>
+  <form method="post" class="form">
+    <label for="email">Gmail / อีเมล์ใหม่</label>
+    <input type="email" id="email" name="email" autocomplete="email" required />
+    <button type="submit" class="btn primary">{% if has_email %}ส่ง OTP เพื่อเปลี่ยนอีเมล์{% else %}ส่ง OTP เพื่อเพิ่มอีเมล์{% endif %}</button>
+  </form>
+{% endif %}
+<p style="margin-top:0.75rem;"><a href="{{ url_for('user_account') }}">กลับตั้งค่าบัญชี</a></p>
+{% endblock %}
