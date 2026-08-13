@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ heading }}</h1>
+<p class="hint">{{ description }}</p>
+
+<form method="post" class="form">
+  <label for="otp">OTP</label>
+  <input type="text" id="otp" name="otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+         autocomplete="one-time-code" placeholder="กรอก OTP 6 หลัก" required />
+  <button type="submit" class="btn primary">ยืนยัน OTP</button>
+</form>
+
+{% if resend_available %}
+<form method="post" action="{% if flow == 'register' %}{{ url_for('user_register_resend_otp') }}{% elif flow == 'recover' %}{{ url_for('recover_resend_otp') }}{% else %}{{ url_for('user_email_resend_otp') }}{% endif %}"
+      class="form" style="margin-top:0.75rem;">
+  <button type="submit" class="btn" id="resend-otp-btn">ส่ง OTP อีกครั้ง</button>
+  <small class="hint" id="resend-countdown"></small>
+</form>
+<script>
+(function () {
+  var seconds = {{ cooldown_seconds|int }};
+  var button = document.getElementById("resend-otp-btn");
+  var label = document.getElementById("resend-countdown");
+  function tick() {
+    if (seconds <= 0) {
+      button.disabled = false;
+      label.textContent = "สามารถส่ง OTP ใหม่ได้แล้ว";
+      return;
+    }
+    button.disabled = true;
+    label.textContent = "ส่งได้อีกครั้งใน " + seconds + " วินาที";
+    seconds -= 1;
+    setTimeout(tick, 1000);
+  }
+  tick();
+})();
+</script>
+{% endif %}
+
+{% if cancel_url %}
+<p style="margin-top:1rem;">
+  <a href="{{ cancel_url }}" class="hint" style="text-decoration:underline;">
+    กรอกอีเมล/ข้อมูลผิด? ยกเลิกแล้วเริ่มใหม่
+  </a>
+</p>
+{% endif %}
+{% endblock %}
